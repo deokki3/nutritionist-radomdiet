@@ -1,0 +1,77 @@
+/* DietCalendar.css */
+.calendar-container {
+    max-width: 1400px; /* 화면 꽉 차게 */
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+/* 요일 헤더 (일, 월, 화...) */
+.day-names {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr); /* 7칸 등분 */
+    text-align: center;
+    font-weight: bold;
+    background: #eee;
+    padding: 10px 0;
+    border-radius: 8px 8px 0 0;
+}
+
+/* 달력 그리드 본체 */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr); /* 7칸 등분 */
+    border-left: 1px solid #ddd;
+    border-top: 1px solid #ddd;
+}
+
+/* 날짜 박스 하나 */
+.day-cell {
+    min-height: 180px; /* 높이 넉넉하게 */
+    border-right: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
+    padding: 5px;
+    background: white;
+    position: relative;
+}
+
+.day-number {
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
+    color: #555;
+}
+
+/* 주말 색상 */
+.day-cell:nth-child(7n+1) .day-number { color: red; } /* 일요일 */
+.day-cell:nth-child(7n) .day-number { color: blue; } /* 토요일 */
+
+/* 식단 내용 */
+.menu-list {
+    font-size: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.menu-item {
+    margin-bottom: 3px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 카테고리별 색상 (눈에 잘 띄게) */
+.type-RICE { background: #fff3cd; }
+.type-SOUP { background: #d1ecf1; }
+.type-MAIN { background: #f8d7da; font-weight: bold; }
+.type-SIDE { background: #d4edda; }
+.type-KIMCHI { background: #fce5cd; color: #888; }

@@ -1,10 +1,11 @@
 // src/main.tsx
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom'; // 1. 라우터 도구들 import
-import App from './App.tsx'
-import Dashboard from './Dashboard.tsx'
-import './index.css'
+import App from './App.tsx';
+import Dashboard from './Dashboard.tsx';
+import MonthlyDiet from './MonthlyDiet.tsx'; // 1. import 추가
+import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -17,6 +18,8 @@ createRoot(document.getElementById('root')!).render(
         
         {/* http://localhost:5173/dashboard -> 대시보드 화면 */}
         <Route path="/dashboard" element={<Dashboard />} />
+        {/* 2. 주소 연결: http://localhost:5173/calendar */}
+        <Route path="/calendar" element={<MonthlyDiet />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,
