@@ -2,9 +2,12 @@ package com.example.dietRandom.service;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.ArrayDeque;   // Deque 구현체
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;        // 양쪽 삽입/삭제 가능한 큐
 import java.util.List;
+import java.util.stream.Collectors; // stream 필터링용
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,44 +30,78 @@ public class DietService {
 
 
     // 🌟 [추가 기능] 월간 식단 생성 및 저장
-    @Transactional // DB 변경(저장/삭제)이 일어나므로 트랜잭션 필수!
-    public List<MealPlan> createMonthlyPlan(int year, int month, int sideCount) {
-        
-        // 1. 해당 월의 시작일과 종료일 구하기
-        YearMonth yearMonth = YearMonth.of(year, month);
-        LocalDate startDate = yearMonth.atDay(1);
-        LocalDate endDate = yearMonth.atEndOfMonth();
+    @Transactional
+public List<MealPlan> createMonthlyPlan(int year, int month, int sideCount) {
 
-        // 2. 기존 식단이 있다면 싹 지우고 다시 짤까요? (일단 삭제하고 시작)
-        mealPlanRepository.deleteByDateBetween(startDate, endDate);
+    YearMonth yearMonth = YearMonth.of(year, month);
+    LocalDate startDate = yearMonth.atDay(1);
+    LocalDate endDate = yearMonth.atEndOfMonth();
 
-        // 3. 1일부터 말일까지 반복문 (Loop)
-        List<MealPlan> monthlyPlans = new ArrayList<>();
-        
-        for (int day = 1; day <= yearMonth.lengthOfMonth(); day++) {
-            LocalDate currentDate = yearMonth.atDay(day);
+    mealPlanRepository.deleteByDateBetween(startDate, endDate);
 
-            // 주말(토,일)은 제외할까요? (일단 포함해서 짜고 나중에 빼는 걸로 하시죠)
-            // if (currentDate.getDayOfWeek() == DayOfWeek.SATURDAY || ...) continue;
+    // 카테고리별 메뉴를 한 번만 DB에서 조회 (매일 조회하면 비효율)
+    List<Menu> rices  = menuRepository.findByCategory("RICE");
+    List<Menu> soups  = menuRepository.findByCategory("SOUP");
+    List<Menu> mains  = menuRepository.findByCategory("MAIN");
+    List<Menu> sides  = menuRepository.findByCategory("SIDE");
+    List<Menu> kimchis = menuRepository.findByCategory("KIMCHI");
 
-            // 4. 기존에 만든 '1끼 랜덤 생성기' 호출! (재사용의 미학)
-            DietResponse randomOneMeal = createRandomDiet(sideCount);
+    // 최근 3일 내 사용된 메인 메뉴 ID를 기억하는 덱
+    // 예) 1일:ID=5, 2일:ID=12, 3일:ID=7 이 들어있으면
+    //     4일 추첨 시 이 세 개는 후보에서 제외
+    int NO_REPEAT_DAYS = 3;
+    Deque<Long> recentMainIds = new ArrayDeque<>();
 
-            // 5. DTO(결과물) -> Entity(DB저장용) 변환
-            MealPlan plan = new MealPlan();
-            plan.setDate(currentDate);
-            plan.setRice(randomOneMeal.getRice());
-            plan.setSoup(randomOneMeal.getSoup());
-            plan.setMain(randomOneMeal.getMain());
-            plan.setKimchi(randomOneMeal.getKimchi());
-            plan.setSideDishes(randomOneMeal.getSides());
+    List<MealPlan> monthlyPlans = new ArrayList<>();
 
-            monthlyPlans.add(plan);
+    for (int day = 1; day <= yearMonth.lengthOfMonth(); day++) {
+        LocalDate currentDate = yearMonth.atDay(day);
+
+        MealPlan plan = new MealPlan();
+        plan.setDate(currentDate);
+
+        // 밥 / 국 / 김치는 기존과 동일하게 순수 랜덤
+        if (!rices.isEmpty()) {
+            Collections.shuffle(rices);
+            plan.setRice(rices.get(0));
+        }
+        if (!soups.isEmpty()) {
+            Collections.shuffle(soups);
+            plan.setSoup(soups.get(0));
+        }
+        if (!kimchis.isEmpty()) {
+            Collections.shuffle(kimchis);
+            plan.setKimchi(kimchis.get(0));
         }
 
-        // 6. 한방에 DB 저장 (Bulk Insert)
-        return mealPlanRepository.saveAll(monthlyPlans);
+        // 메인 메뉴 — 연속 중복 방지 적용
+        if (!mains.isEmpty()) {
+            Menu selected = pickWithoutRepeat(mains, recentMainIds);
+            plan.setMain(selected);
+
+            // 선택된 메인 ID를 덱에 추가
+            recentMainIds.addLast(selected.getId());
+
+            // 덱 크기가 N을 초과하면 가장 오래된 항목 제거
+            if (recentMainIds.size() > NO_REPEAT_DAYS) {
+                recentMainIds.pollFirst();
+            }
+        }
+
+        // 반찬
+        if (!sides.isEmpty()) {
+            Collections.shuffle(sides);
+            int limit = Math.min(sideCount, sides.size());
+            plan.setSideDishes(new ArrayList<>(sides.subList(0, limit)));
+        } else {
+            plan.setSideDishes(Collections.emptyList());
+        }
+
+        monthlyPlans.add(plan);
     }
+
+    return mealPlanRepository.saveAll(monthlyPlans);
+}
     
     // 🌟 [추가 기능] 월간 식단 조회
     public List<MealPlan> getMonthlyPlan(int year, int month) {
@@ -117,5 +154,20 @@ public class DietService {
         }
 
         return diet;
+    }
+
+        // 최근 사용된 ID 목록(recentIds)에 없는 메뉴만 후보로 추첨
+    // 후보가 아예 없으면(메뉴 종류가 너무 적으면) 전체에서 랜덤
+    private Menu pickWithoutRepeat(List<Menu> candidates, Deque<Long> recentIds) {
+        List<Menu> available = candidates.stream()
+                .filter(m -> !recentIds.contains(m.getId()))
+                .collect(Collectors.toList());
+
+        if (available.isEmpty()) {
+            available = new ArrayList<>(candidates);
+        }
+
+        Collections.shuffle(available);
+        return available.get(0);
     }
 }
